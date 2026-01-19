@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/header_menu.dart';
-import '../widgets/inventory_settings.dart';
+import '../widgets/settings/inventory_settings.dart';
+import '../widgets/settings/access_settings.dart';
 import '../widgets/inventory_action_row.dart';
 import '../widgets/time_picker_sheet.dart';
 import '../widgets/inventory_table.dart';
