@@ -1,12 +1,41 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/header_menu.dart';
-import '../widgets/settings/inventory_settings.dart';
-import '../widgets/settings/access_settings.dart';
-import '../widgets/inventory_action_row.dart';
-import '../widgets/time_picker_sheet.dart';
-import '../widgets/inventory_table.dart';
-import '../widgets/inventory_info_bar.dart';
+
+// INVENTORY
+import 'inventory/inventory_settings.dart';
+import 'inventory/inventory_action_row.dart';
+import 'inventory/time_picker_sheet.dart';
+import 'inventory/inventory_info_bar.dart';
+
+// ACCESS
+import 'Access/access_action_bar.dart';
+import 'Access/access_settings.dart';
+
+// TEMP
+import 'temp/temp_page.dart';
+
+// COMMON
+import '../widgets/app_data_table.dart';
+
+/// ======================
+/// MODEL INVENTORY
+/// ======================
+class InventoryRow {
+  final int no;
+  final String tagId;
+  final String rssi;
+  final String time;
+  final String status;
+
+  InventoryRow({
+    required this.no,
+    required this.tagId,
+    required this.rssi,
+    required this.time,
+    required this.status,
+  });
+}
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
@@ -17,19 +46,22 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  /// Menu đang được chọn trên header
+  /// TAB CHÍNH
   String _activeMenu = 'Inventory';
 
-  /// Trạng thái mở / đóng phần cài đặt Inventory
+  /// SETTINGS
   bool _showInventorySettings = false;
+  bool _showAccessSettings = false;
+
+  /// ACCESS MODE
+  int _accessTabIndex = 0;
 
   // ======================
-  // THỜI GIAN INVENTORY
+  // TIME INVENTORY
   // ======================
-  int _timeValue = 5;          // Giá trị thời gian
-  String _timeUnit = 'seconds'; // seconds | minutes | hours
+  int _timeValue = 5;
+  String _timeUnit = 'seconds';
 
-  /// Chuỗi hiển thị thời gian (vd: 5 s, 3 min, 1 h)
   String get _timeDisplay {
     switch (_timeUnit) {
       case 'minutes':
@@ -42,7 +74,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // ======================
-  // DỮ LIỆU BẢNG INVENTORY
+  // INVENTORY DATA
   // ======================
   final List<InventoryRow> _rows = [
     InventoryRow(
@@ -54,82 +86,150 @@ class _MyHomePageState extends State<MyHomePage> {
     ),
   ];
 
-  // ======================
-  // MENU DỌC (3 CHẤM)
-  // ======================
   void _onMenuSelected(String value) {
     if (value == 'reset') {
-      // Xoá toàn bộ dữ liệu inventory
-      setState(() {
-        _rows.clear();
-      });
+      setState(() => _rows.clear());
     }
   }
 
   // ======================
-  // NỘI DUNG CHÍNH
+  // BODY
   // ======================
   Widget _buildBody() {
-    // Nếu không ở tab Inventory thì chỉ hiển thị text
-    if (_activeMenu != 'Inventory') {
-      return Center(
-        child: Text('$_activeMenu content here'),
-      );
-    }
-
     return SingleChildScrollView(
       child: Column(
         children: [
-          /// PHẦN CÀI ĐẶT INVENTORY
-          InventorySettings(
-            expanded: _showInventorySettings,
-            onToggle: () {
-              setState(() {
-                _showInventorySettings = !_showInventorySettings;
-              });
-            },
-          ),
+          // ================= INVENTORY =================
+          if (_activeMenu == 'Inventory') ...[
+            InventorySettings(
+              expanded: _showInventorySettings,
+              onToggle: () {
+                setState(() {
+                  _showInventorySettings = !_showInventorySettings;
+                });
+              },
+            ),
 
-          /// THANH THAO TÁC: TIME / START / CLEAR
-          InventoryActionRow(
-            timeDisplay: _timeDisplay,
-            onPickTime: () {
-              showTimePickerSheet(
-                context: context,
-                value: _timeValue,
-                unit: _timeUnit,
-                onApply: (value, unit) {
-                  setState(() {
-                    _timeValue = value;
-                    _timeUnit = unit;
-                  });
-                },
-              );
-            },
-            onStart: () {
-              // Chưa xử lý logic start
-            },
-            onClear: () {
-              setState(() {
-                _rows.clear();
-              });
-            },
-          ),
+            InventoryActionRow(
+              timeDisplay: _timeDisplay,
+              onPickTime: () {
+                showTimePickerSheet(
+                  context: context,
+                  value: _timeValue,
+                  unit: _timeUnit,
+                  onApply: (v, u) {
+                    setState(() {
+                      _timeValue = v;
+                      _timeUnit = u;
+                    });
+                  },
+                );
+              },
+              onStart: () {},
+              onClear: () => setState(() => _rows.clear()),
+            ),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-          /// THANH THÔNG SỐ (Tags + Speed | All data + Exec time)
-          InventoryInfoBar(
-            tags: _rows.length,
-            speed: 13,        // Tạm thời mock
-            total: _rows.length,
-            execTime: 0,      // Tạm thời mock
-          ),
+            InventoryInfoBar(
+              tags: _rows.length,
+              speed: 13,
+              total: _rows.length,
+              execTime: 0,
+            ),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-          /// BẢNG DỮ LIỆU INVENTORY
-          InventoryTable(rows: _rows),
+            AppDataTable(
+              headers: const ['No', 'Tag ID', 'RSSI', 'Time', 'Status'],
+              rows: _rows.map((r) {
+                return [
+                  Text(r.no.toString()),
+                  Text(r.tagId),
+                  Text(r.rssi),
+                  Text(r.time),
+                  Text(
+                    r.status,
+                    style: TextStyle(
+                      color: r.status == 'OK'
+                          ? Colors.green
+                          : Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ];
+              }).toList(),
+            ),
+          ],
+
+          // ================= ACCESS =================
+          if (_activeMenu == 'Access') ...[
+            const SizedBox(height: 8),
+
+            /// ACTION BAR – READ / WRITE / LOCK / DESTROY
+            AccessActionBar(
+              activeIndex: _accessTabIndex,
+              onChanged: (i) {
+                setState(() => _accessTabIndex = i);
+              },
+            ),
+
+            const SizedBox(height: 8),
+
+            /// PANEL NỘI DUNG ACCESS
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    [
+                      'READ TAG PANEL',
+                      'WRITE TAG PANEL',
+                      'LOCK TAG PANEL',
+                      'DESTROY TAG PANEL',
+                    ][_accessTabIndex],
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            /// ACCESS SETTINGS – NÚT RIÊNG
+            AccessSettings(
+              expanded: _showAccessSettings,
+              onToggle: () {
+                setState(() {
+                  _showAccessSettings = !_showAccessSettings;
+                });
+              },
+            ),
+          ],
+
+          // ================= TEMP =================
+          if (_activeMenu == 'Temp') ...[
+            const SizedBox(height: 8),
+            TempPage(),
+          ],
+
+          // ================= OTHER =================
+          if (_activeMenu != 'Inventory' &&
+              _activeMenu != 'Access' &&
+              _activeMenu != 'Temp')
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                '$_activeMenu content here',
+                style: const TextStyle(fontSize: 16),
+              ),
+            ),
 
           const SizedBox(height: 24),
         ],
@@ -138,37 +238,28 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // ======================
-  // BUILD GIAO DIỆN
+  // UI
   // ======================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
-
-        /// MENU NGANG + MENU DỌC
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           HeaderMenu(
             activeMenu: _activeMenu,
             onChanged: (menu) {
               setState(() {
                 _activeMenu = menu;
-
-                // Rời Inventory thì tự đóng phần settings
-                if (menu != 'Inventory') {
-                  _showInventorySettings = false;
-                }
+                _showInventorySettings = false;
+                _showAccessSettings = false;
               });
             },
           ),
 
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
             onSelected: _onMenuSelected,
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'reset', child: Text('Reset reader')),
@@ -182,8 +273,6 @@ class _MyHomePageState extends State<MyHomePage> {
               PopupMenuItem(value: 'find', child: Text('Find tag')),
             ],
           ),
-
-          const SizedBox(width: 8),
         ],
       ),
       body: _buildBody(),

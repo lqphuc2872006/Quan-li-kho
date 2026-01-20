@@ -28,16 +28,16 @@ class InventoryActionRow extends StatelessWidget {
               onPressed: onPickTime,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 2),
           Expanded(
-            flex: 3,
+            flex: 2,
             child: ElevatedButton.icon(
               icon: const Icon(Icons.play_arrow),
               label: const Text('Start'),
               onPressed: onStart,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 2),
           Expanded(
             flex: 2,
             child: ElevatedButton.icon(
