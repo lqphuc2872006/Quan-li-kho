@@ -43,9 +43,19 @@ class FilterPage extends StatelessWidget {
 
                   Row(
                     children: const [
-                      Expanded(child: _Dropdown(label: 'Filter ID', value: 'Mask No.1')),
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'Filter ID',
+                          value: 'Mask No.1',
+                        ),
+                      ),
                       SizedBox(width: 12),
-                      Expanded(child: _Dropdown(label: 'Session', value: 'S0')),
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'Session',
+                          value: 'S0',
+                        ),
+                      ),
                     ],
                   ),
 
@@ -53,9 +63,19 @@ class FilterPage extends StatelessWidget {
 
                   Row(
                     children: const [
-                      Expanded(child: _Dropdown(label: 'Filter action', value: '00')),
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'Filter action',
+                          value: '00',
+                        ),
+                      ),
                       SizedBox(width: 12),
-                      Expanded(child: _Dropdown(label: 'Filter area', value: 'Reserve')),
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'Filter area',
+                          value: 'Reserve',
+                        ),
+                      ),
                     ],
                   ),
 
@@ -63,9 +83,17 @@ class FilterPage extends StatelessWidget {
 
                   Row(
                     children: const [
-                      Expanded(child: _NumberField(label: 'Start address (bit)')),
+                      Expanded(
+                        child: _NumberField(
+                          label: 'Start address (bit)',
+                        ),
+                      ),
                       SizedBox(width: 12),
-                      Expanded(child: _NumberField(label: 'Filter length (bit)')),
+                      Expanded(
+                        child: _NumberField(
+                          label: 'Filter length (bit)',
+                        ),
+                      ),
                     ],
                   ),
 
@@ -83,10 +111,19 @@ class FilterPage extends StatelessWidget {
                   _sectionTitle('Clear settings'),
 
                   Row(
-                    children: [
-                      const Expanded(child: _Dropdown(label: 'ID', value: 'Mask All')),
-                      const SizedBox(width: 12),
-                      Expanded(child: _secondaryButton('CLEAR FILTER')),
+                    children: const [
+                      Expanded(
+                        child: _Dropdown(
+                          label: 'ID',
+                          value: 'Mask All',
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: _ClearButton(
+                          text: 'CLEAR FILTER',
+                        ),
+                      ),
                     ],
                   ),
 
@@ -101,17 +138,40 @@ class FilterPage extends StatelessWidget {
 
                   /// ===== RESULT TABLE HEADER =====
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Row(
                       children: [
-                        Expanded(child: Text('ID', style: TextStyle(fontWeight: FontWeight.w600))),
-                        Expanded(child: Text('Session', style: TextStyle(fontWeight: FontWeight.w600))),
-                        Expanded(child: Text('Action', style: TextStyle(fontWeight: FontWeight.w600))),
-                        Expanded(child: Text('Area', style: TextStyle(fontWeight: FontWeight.w600))),
+                        Expanded(
+                          child: Text(
+                            'ID',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            'Session',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            'Action',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            'Area',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -144,14 +204,14 @@ class FilterPage extends StatelessWidget {
   Widget _primaryButton(String text) {
     return SizedBox(
       width: double.infinity,
+      height: 48,
       child: ElevatedButton(
         onPressed: () {},
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.blue,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
         ),
         child: Text(
@@ -165,15 +225,19 @@ class FilterPage extends StatelessWidget {
   Widget _secondaryButton(String text) {
     return SizedBox(
       width: double.infinity,
+      height: 48,
       child: OutlinedButton(
         onPressed: () {},
         style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
         ),
-        child: Text(text),
+        child: Text(
+          text,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
@@ -195,12 +259,20 @@ class _Dropdown extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        ),
         const SizedBox(height: 4),
         DropdownButtonFormField<String>(
           value: value,
           items: [value]
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .map(
+                (e) => DropdownMenuItem(
+              value: e,
+              child: Text(e),
+            ),
+          )
               .toList(),
           onChanged: (_) {},
           decoration: _decoration(),
@@ -220,7 +292,10 @@ class _NumberField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        ),
         const SizedBox(height: 4),
         TextFormField(
           keyboardType: TextInputType.number,
@@ -241,7 +316,10 @@ class _TextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        ),
         const SizedBox(height: 4),
         TextFormField(
           decoration: _decoration(),
@@ -251,10 +329,47 @@ class _TextField extends StatelessWidget {
   }
 }
 
+/// ===== BUTTON RIÊNG CHO CLEAR FILTER (FIX LỆCH) =====
+class _ClearButton extends StatelessWidget {
+  final String text;
+
+  const _ClearButton({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16), // đẩy button xuống ngang label dropdown
+        SizedBox(
+          height: 48, // ⭐ CHIỀU CAO CHUẨN INPUT
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () {},
+            style: OutlinedButton.styleFrom(
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text(
+              text,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 InputDecoration _decoration() {
   return InputDecoration(
     isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 10,
+    ),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
     ),
