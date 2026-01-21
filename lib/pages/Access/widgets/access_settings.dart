@@ -22,7 +22,18 @@ class AccessSettings extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: onToggle,
               icon: const Icon(Icons.settings),
-              label: const Text('Access settings'),
+              label: const Text(
+                'Access settings',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
           ),
         ),

@@ -2,40 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../widgets/header_menu.dart';
 
-// INVENTORY
-import 'inventory/inventory_settings.dart';
-import 'inventory/inventory_action_row.dart';
-import 'inventory/time_picker_sheet.dart';
-import 'inventory/inventory_info_bar.dart';
+// INVENTORY PAGE (ĐÃ TÁCH)
+import 'inventory/page/inventory_page.dart';
 
-// ACCESS
-import 'Access/access_action_bar.dart';
-import 'Access/access_settings.dart';
+// ACCESS PAGE
+import 'Access/page/access_page.dart';
 
 // TEMP
-import 'temp/temp_page.dart';
+import 'temp/widgets/temp_page.dart';
 
-// COMMON
-import '../widgets/app_data_table.dart';
+//Filter
+import 'filter/page/filter_page.dart';
 
-/// ======================
-/// MODEL INVENTORY
-/// ======================
-class InventoryRow {
-  final int no;
-  final String tagId;
-  final String rssi;
-  final String time;
-  final String status;
+//params
+import 'params/page/params_page.dart';
 
-  InventoryRow({
-    required this.no,
-    required this.tagId,
-    required this.rssi,
-    required this.time,
-    required this.status,
-  });
-}
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
@@ -46,51 +27,42 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  /// TAB CHÍNH
+  /// MENU CHÍNH
   String _activeMenu = 'Inventory';
 
-  /// SETTINGS
-  bool _showInventorySettings = false;
-  bool _showAccessSettings = false;
-
-  /// ACCESS MODE
-  int _accessTabIndex = 0;
-
-  // ======================
-  // TIME INVENTORY
-  // ======================
-  int _timeValue = 5;
-  String _timeUnit = 'seconds';
-
-  String get _timeDisplay {
-    switch (_timeUnit) {
-      case 'minutes':
-        return '$_timeValue min';
-      case 'hours':
-        return '$_timeValue h';
-      default:
-        return '$_timeValue s';
-    }
-  }
-
-  // ======================
-  // INVENTORY DATA
-  // ======================
-  final List<InventoryRow> _rows = [
-    InventoryRow(
-      no: 1,
-      tagId: 'E2000017221101441890A1B2',
-      rssi: '-45 dBm',
-      time: '10:32:11',
-      status: 'OK',
-    ),
-  ];
-
   void _onMenuSelected(String value) {
-    if (value == 'reset') {
-      setState(() => _rows.clear());
-    }
+    // xử lý menu chung (nếu cần)
   }
+
+  //Mo filter
+  void _openFilter(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => const FractionallySizedBox(
+        heightFactor: 0.9,
+        child: FilterPage(),
+      ),
+    );
+  }
+
+  void _openParams(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => const FractionallySizedBox(
+        heightFactor: 0.9,
+        child: ParamsPage(),
+      ),
+    );
+  }
+
 
   // ======================
   // BODY
@@ -101,116 +73,12 @@ class _MyHomePageState extends State<MyHomePage> {
         children: [
           // ================= INVENTORY =================
           if (_activeMenu == 'Inventory') ...[
-            InventorySettings(
-              expanded: _showInventorySettings,
-              onToggle: () {
-                setState(() {
-                  _showInventorySettings = !_showInventorySettings;
-                });
-              },
-            ),
-
-            InventoryActionRow(
-              timeDisplay: _timeDisplay,
-              onPickTime: () {
-                showTimePickerSheet(
-                  context: context,
-                  value: _timeValue,
-                  unit: _timeUnit,
-                  onApply: (v, u) {
-                    setState(() {
-                      _timeValue = v;
-                      _timeUnit = u;
-                    });
-                  },
-                );
-              },
-              onStart: () {},
-              onClear: () => setState(() => _rows.clear()),
-            ),
-
-            const SizedBox(height: 8),
-
-            InventoryInfoBar(
-              tags: _rows.length,
-              speed: 13,
-              total: _rows.length,
-              execTime: 0,
-            ),
-
-            const SizedBox(height: 8),
-
-            AppDataTable(
-              headers: const ['No', 'Tag ID', 'RSSI', 'Time', 'Status'],
-              rows: _rows.map((r) {
-                return [
-                  Text(r.no.toString()),
-                  Text(r.tagId),
-                  Text(r.rssi),
-                  Text(r.time),
-                  Text(
-                    r.status,
-                    style: TextStyle(
-                      color: r.status == 'OK'
-                          ? Colors.green
-                          : Colors.red,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ];
-              }).toList(),
-            ),
+            const InventoryPage(),
           ],
 
           // ================= ACCESS =================
           if (_activeMenu == 'Access') ...[
-            const SizedBox(height: 8),
-
-            /// ACTION BAR – READ / WRITE / LOCK / DESTROY
-            AccessActionBar(
-              activeIndex: _accessTabIndex,
-              onChanged: (i) {
-                setState(() => _accessTabIndex = i);
-              },
-            ),
-
-            const SizedBox(height: 8),
-
-            /// PANEL NỘI DUNG ACCESS
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    [
-                      'READ TAG PANEL',
-                      'WRITE TAG PANEL',
-                      'LOCK TAG PANEL',
-                      'DESTROY TAG PANEL',
-                    ][_accessTabIndex],
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            /// ACCESS SETTINGS – NÚT RIÊNG
-            AccessSettings(
-              expanded: _showAccessSettings,
-              onToggle: () {
-                setState(() {
-                  _showAccessSettings = !_showAccessSettings;
-                });
-              },
-            ),
+            const AccessPage(),
           ],
 
           // ================= TEMP =================
@@ -218,6 +86,8 @@ class _MyHomePageState extends State<MyHomePage> {
             const SizedBox(height: 8),
             TempPage(),
           ],
+
+
 
           // ================= OTHER =================
           if (_activeMenu != 'Inventory' &&
@@ -250,31 +120,23 @@ class _MyHomePageState extends State<MyHomePage> {
           HeaderMenu(
             activeMenu: _activeMenu,
             onChanged: (menu) {
+              if (menu == 'Filter') {
+                _openFilter(context);
+                return;
+              }
+              if (menu == 'Params') {
+                _openParams(context);
+                return;
+              }
               setState(() {
                 _activeMenu = menu;
-                _showInventorySettings = false;
-                _showAccessSettings = false;
               });
             },
-          ),
-
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onSelected: _onMenuSelected,
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'reset', child: Text('Reset reader')),
-              PopupMenuItem(value: 'monitor', child: Text('Data monitoring')),
-              PopupMenuItem(value: 'language', child: Text('Language switch')),
-              PopupMenuItem(value: 'connection', child: Text('Other connection')),
-              PopupMenuItem(value: 'export', child: Text('Export to Excel')),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'setup', child: Text('Set up')),
-              PopupMenuItem(value: 'about', child: Text('About')),
-              PopupMenuItem(value: 'find', child: Text('Find tag')),
-            ],
+            onMenuSelected: _onMenuSelected, // ⭐ menu 3 chấm
           ),
         ],
       ),
+
       body: _buildBody(),
     );
   }

@@ -1,5 +1,5 @@
 //{{NO_DEPENDENCIES}}
-// Microsoft Visual C++ generated include file.
+// Microsoft Visual C++ generated include filter.
 // Used by Runner.rc
 //
 #define IDI_APP_ICON                    101
