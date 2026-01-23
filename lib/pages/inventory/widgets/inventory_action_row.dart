@@ -5,6 +5,7 @@ class InventoryActionRow extends StatelessWidget {
   final VoidCallback onPickTime;
   final VoidCallback onStart;
   final VoidCallback onClear;
+  final bool isScanning;
 
   const InventoryActionRow({
     super.key,
@@ -12,6 +13,7 @@ class InventoryActionRow extends StatelessWidget {
     required this.onPickTime,
     required this.onStart,
     required this.onClear,
+    this.isScanning = false,
   });
 
   @override
@@ -25,15 +27,18 @@ class InventoryActionRow extends StatelessWidget {
             child: OutlinedButton.icon(
               icon: const Icon(Icons.timer),
               label: Text('Time ($timeDisplay)'),
-              onPressed: onPickTime,
+              onPressed: isScanning ? null : onPickTime,
             ),
           ),
           const SizedBox(width: 2),
           Expanded(
             flex: 2,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Start'),
+              icon: Icon(isScanning ? Icons.stop : Icons.play_arrow),
+              label: Text(isScanning ? 'Stop' : 'Start'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isScanning ? Colors.red : null,
+              ),
               onPressed: onStart,
             ),
           ),
@@ -43,7 +48,7 @@ class InventoryActionRow extends StatelessWidget {
             child: ElevatedButton.icon(
               icon: const Icon(Icons.clear),
               label: const Text('Clear'),
-              onPressed: onClear,
+              onPressed: isScanning ? null : onClear,
             ),
           ),
         ],
