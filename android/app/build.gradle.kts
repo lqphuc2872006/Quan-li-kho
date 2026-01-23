@@ -42,3 +42,11 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // RFID SDK JAR files - Copy these from SDK to app/libs folder:
+    // - lib_connect.jar
+    // - lib_reader.jar
+    // - SerialPort.jar
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
+}
