@@ -9,7 +9,7 @@ import 'inventory/page/inventory_page.dart';
 import 'Access/page/access_page.dart';
 
 // TEMP
-import 'temp/widgets/temp_page.dart';
+import 'temp/page/temp_page.dart';
 
 //Filter
 import 'filter/page/filter_page.dart';

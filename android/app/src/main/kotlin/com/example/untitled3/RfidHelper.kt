@@ -1,6 +1,10 @@
 package com.example.untitled3
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import io.flutter.plugin.common.EventChannel
+
 import com.payne.reader.Reader
 import com.payne.reader.base.Consumer
 import com.payne.reader.bean.config.AntennaCount
@@ -19,10 +23,9 @@ import com.payne.reader.process.ReaderImpl
 class RfidHelper {
     private var mReader: Reader? = null
     private var mConnectHandle: ConnectHandle? = null
-    private var mInventoryCallback: ((String, Int) -> Unit)? = null
-    private var mInventoryEndCallback: (() -> Unit)? = null
-    private var mErrorCallback: ((String) -> Unit)? = null
+    private var mTagEventSink: EventChannel.EventSink? = null
     private var isScanning = false
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     companion object {
         private const val TAG = "RfidHelper"
@@ -51,7 +54,6 @@ class RfidHelper {
             connected
         } catch (e: Exception) {
             Log.e(TAG, "Connect error", e)
-            mErrorCallback?.invoke("Connect error: ${e.message}")
             false
         }
     }
@@ -79,38 +81,80 @@ class RfidHelper {
     }
 
     /**
-     * Start inventory scan
+     * Set event sink for streaming tags
      */
-    fun startInventory(
-        onTagScanned: (String, Int) -> Unit,
-        onScanEnd: () -> Unit,
-        onError: (String) -> Unit
-    ) {
+    fun setTagEventSink(sink: EventChannel.EventSink?) {
+        mTagEventSink = sink
+    }
+
+    /**
+     * Start inventory scan
+     * Follows the exact pattern from the demo project:
+     * 1. Set power level
+     * 2. Set inventory config
+     * 3. Set work antenna
+     * 4. Start inventory in antenna callback
+     */
+    fun startInventory() {
         if (isScanning) {
             Log.w(TAG, "Already scanning")
             return
         }
 
         if (!isConnected()) {
-            onError("Not connected to reader")
+            Log.e(TAG, "Not connected to reader")
             return
         }
 
-        mInventoryCallback = onTagScanned
-        mInventoryEndCallback = onScanEnd
-        mErrorCallback = onError
-
         try {
-            // Create inventory parameters
+            // Step 1: Set power level (increased to 25 for better tag detection)
+            val powerLevel: Byte = 25
+            Log.d(TAG, "Setting power level to: $powerLevel")
+            
+            mReader?.setOutputPowerUniformly(powerLevel, true,
+                Consumer { success ->
+                    Log.d(TAG, "Power set successfully")
+                    // Step 2: Set inventory config FIRST (before setting antenna)
+                    setInventoryConfig()
+                    // Step 3: Set work antenna, then start in callback
+                    setWorkAntennaAndStart()
+                },
+                Consumer { failure ->
+                    Log.e(TAG, "Failed to set power: ${ResultCode.getNameForResultCode(failure.errorCode)}")
+                    // Try to continue anyway
+                    setInventoryConfig()
+                    setWorkAntennaAndStart()
+                }
+            )
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Start inventory error", e)
+            isScanning = false
+            mainHandler.post {
+                mTagEventSink?.error("INVENTORY_ERROR", "Start scan error: ${e.message}", null)
+            }
+        }
+    }
+    
+    /**
+     * Set inventory configuration (must be called before setting work antenna)
+     */
+    private fun setInventoryConfig() {
+        try {
+            // Create inventory parameters - using Target.A (more common for most tags)
             val inventoryParam = InventoryParam().apply {
                 setAntennaCount(AntennaCount.SINGLE_CHANNEL)
-                setSession(Session.S0)
-                setTarget(Target.B)
+                setSession(Session.S0)  // Session S0 is most common
+                setTarget(Target.A)     // Changed from Target.B to Target.A (more compatible)
                 setFastSwitch(false)
                 setLoopCount(-1) // Continuous scan
             }
+            Log.d(TAG, "Inventory param: Session=${inventoryParam.getSession()}, Target=${inventoryParam.getTarget()}")
 
-            // Create inventory config
+            // IMPORTANT: Switch antenna count BEFORE setting inventory config (matching demo project)
+            mReader?.switchAntennaCount(inventoryParam.getAntennaCount())
+            Log.d(TAG, "Antenna count switched to: ${inventoryParam.getAntennaCount()}")
+
             val config = InventoryConfig.Builder()
                 .setInventoryParam(inventoryParam)
                 .setInventory(inventoryParam.getInventory())
@@ -119,19 +163,34 @@ class RfidHelper {
                         val epc = tag.epc?.replace(" ", "") ?: ""
                         val rssi = tag.rssi
                         Log.d(TAG, "Tag scanned: EPC=$epc, RSSI=$rssi")
-                        mInventoryCallback?.invoke(epc, rssi)
+                        
+                        // Post to main thread - EventChannel requires main thread
+                        mainHandler.post {
+                            if (isScanning && mTagEventSink != null) {
+                                try {
+                                    mTagEventSink?.success(mapOf(
+                                        "epc" to epc,
+                                        "rssi" to "$rssi dBm",
+                                        "timestamp" to System.currentTimeMillis().toString()
+                                    ))
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error sending tag", e)
+                                }
+                            }
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing tag", e)
                     }
                 })
                 .setOnInventoryTagEndSuccess(Consumer { end ->
                     try {
+                        Log.d(TAG, "Inventory end: isFinished=${end.isFinished}, totalRead=${end.totalRead}, readRate=${end.readRate}")
                         if (end.isFinished) {
-                            Log.d(TAG, "Inventory finished")
+                            Log.d(TAG, "Inventory finished - stopping scan")
                             isScanning = false
-                            mInventoryEndCallback?.invoke()
                         } else {
-                            // Continue scanning only if still in scanning state
+                            // Continue scanning if still in scanning state
+                            Log.d(TAG, "Inventory not finished, continuing scan...")
                             if (isScanning) {
                                 mReader?.startInventory(false)
                             }
@@ -143,9 +202,7 @@ class RfidHelper {
                 })
                 .setOnFailure { failure ->
                     try {
-                        if (!isScanning) {
-                            return@setOnFailure
-                        }
+                        if (!isScanning) return@setOnFailure
                         val errorMsg = ResultCode.getNameForResultCode(failure.errorCode)
                         Log.e(TAG, "Inventory failure: $errorMsg")
                         // Only stop if it's a critical error, otherwise retry
@@ -156,7 +213,9 @@ class RfidHelper {
                             }
                         } else {
                             isScanning = false
-                            mErrorCallback?.invoke("Scan error: $errorMsg")
+                            mainHandler.post {
+                                mTagEventSink?.error("INVENTORY_ERROR", "Scan error: $errorMsg", null)
+                            }
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing failure", e)
@@ -166,13 +225,45 @@ class RfidHelper {
                 .build()
 
             mReader?.setInventoryConfig(config)
-            mReader?.startInventory(false)
-            isScanning = true
-            Log.d(TAG, "Inventory started")
+            Log.d(TAG, "Inventory config set successfully")
+            
         } catch (e: Exception) {
-            Log.e(TAG, "Start inventory error", e)
+            Log.e(TAG, "Set inventory config error", e)
+        }
+    }
+    
+    /**
+     * Set work antenna and start inventory in callback (matching demo project pattern)
+     */
+    private fun setWorkAntennaAndStart() {
+        try {
+            // Set work antenna (antenna 0 for SINGLE_CHANNEL - antenna ID starts from 0)
+            mReader?.setWorkAntenna(0,
+                Consumer { antSuccess ->
+                    // Success callback - start inventory here (matching demo project)
+                    Log.d(TAG, "Work antenna set successfully, starting inventory")
+                    if (!isScanning) {
+                        isScanning = true
+                        mReader?.startInventory(false)
+                        Log.d(TAG, "Inventory started (REAL RFID)")
+                    }
+                },
+                Consumer { antFailure ->
+                    Log.e(TAG, "Failed to set work antenna: ${ResultCode.getNameForResultCode(antFailure.errorCode)}")
+                    // Try to start anyway
+                    if (!isScanning) {
+                        isScanning = true
+                        mReader?.startInventory(false)
+                        Log.d(TAG, "Inventory started despite antenna error")
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Set work antenna error", e)
             isScanning = false
-            onError("Start scan error: ${e.message}")
+            mainHandler.post {
+                mTagEventSink?.error("INVENTORY_ERROR", "Set antenna error: ${e.message}", null)
+            }
         }
     }
 
@@ -198,15 +289,5 @@ class RfidHelper {
      */
     fun isScanning(): Boolean {
         return isScanning
-    }
-
-    /**
-     * Release resources
-     */
-    fun release() {
-        stopInventory()
-        disconnect()
-        mReader = null
-        instance = null
     }
 }

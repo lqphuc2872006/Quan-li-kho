@@ -7,25 +7,25 @@ plugins {
 
 android {
     namespace = "com.example.untitled3"
-    compileSdk = flutter.compileSdkVersion
+    // COMPILE SDK set to 34 to satisfy Flutter dependencies
+    compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "1.8"
     }
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.untitled3"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // TARGET SDK kept at 29 for legacy hardware compatibility
+        targetSdk = 29
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -41,4 +41,12 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // RFID SDK JAR files - Copy these from SDK to app/libs folder:
+    // - lib_connect.jar
+    // - lib_reader.jar
+    // - SerialPort.jar
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
 }
