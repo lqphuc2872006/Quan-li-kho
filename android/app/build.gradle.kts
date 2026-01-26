@@ -25,7 +25,7 @@ android {
         applicationId = "com.example.untitled3"
         minSdk = flutter.minSdkVersion
         // TARGET SDK kept at 29 for legacy hardware compatibility
-        targetSdk = 29
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

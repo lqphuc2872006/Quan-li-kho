@@ -35,12 +35,18 @@ class _InventoryPageState extends State<InventoryPage> {
   bool _showSettings = false;
   bool _isScanning = false;
 
+  // 🔊 AUDIO
   final AudioPlayer _beepPlayer = AudioPlayer();
+  DateTime _lastBeep = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // ⏱ TIMERS
   Timer? _stopScanTimer;
-  Timer? _uiUpdateTimer;
+  Timer? _uiRefreshTimer;
 
-  final Map<String, InventoryRow> _tagMap = {};
+  // 📦 DATA
+  final Map<String, InventoryRow> _buffer = {}; // RFID buffer
+  final Map<String, InventoryRow> _tagMap = {}; // UI data
+
   List<InventoryRow> get _rows =>
       _tagMap.values.toList()..sort((a, b) => a.no.compareTo(b.no));
 
@@ -57,9 +63,7 @@ class _InventoryPageState extends State<InventoryPage> {
   @override
   void initState() {
     super.initState();
-
     _beepPlayer.setReleaseMode(ReleaseMode.stop);
-
     _initTagListener();
     _checkConnection();
   }
@@ -68,7 +72,7 @@ class _InventoryPageState extends State<InventoryPage> {
   void dispose() {
     _tagSubscription?.cancel();
     _stopScanTimer?.cancel();
-    _uiUpdateTimer?.cancel();
+    _uiRefreshTimer?.cancel();
     _beepPlayer.dispose();
 
     if (_isScanning) {
@@ -76,6 +80,8 @@ class _InventoryPageState extends State<InventoryPage> {
     }
     super.dispose();
   }
+
+  // ================= RFID =================
 
   void _initTagListener() {
     _tagSubscription = RfidService.tagStream.listen(
@@ -91,7 +97,6 @@ class _InventoryPageState extends State<InventoryPage> {
         _handleScanStop();
       },
     );
-
     _tagSubscription?.pause();
   }
 
@@ -107,51 +112,44 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-  /// =====================
-  /// TAG EVENT (MỖI EVENT = 1 BÍP)
-  /// =====================
+  // ================= TAG EVENT (NO setState) =================
+
   void _onTagScanned(Map<dynamic, dynamic> raw) {
-    final map = Map<String, dynamic>.from(raw);
-    final tag = RfidTag.fromMap(map);
-    final now = DateTime.now();
+    final tag = RfidTag.fromMap(Map<String, dynamic>.from(raw));
+    final old = _buffer[tag.epc];
 
-    // 🔊 MỖI EVENT → 1 tiếng
-    _beepPlayer.play(AssetSource('sounds/beep.mp3'));
+    if (old != null) {
+      _buffer[tag.epc] = InventoryRow(
+        no: old.no,
+        tagId: tag.epc,
+        rssi: tag.rssi,
+        time: tag.timestamp,
+        count: old.count + 1,
+      );
+    } else {
+      _buffer[tag.epc] = InventoryRow(
+        no: _buffer.length + 1,
+        tagId: tag.epc,
+        rssi: tag.rssi,
+        time: tag.timestamp,
+        count: 1,
+      );
+    }
 
-    setState(() {
-      final old = _tagMap[tag.epc];
-      if (old != null) {
-        _tagMap[tag.epc] = InventoryRow(
-          no: old.no,
-          tagId: tag.epc,
-          rssi: tag.rssi,
-          time: tag.timestamp,
-          count: old.count + 1,
-        );
-      } else {
-        _tagMap[tag.epc] = InventoryRow(
-          no: _tagMap.length + 1,
-          tagId: tag.epc,
-          rssi: tag.rssi,
-          time: tag.timestamp,
-          count: 1,
-        );
-      }
-
-      _totalTagsFound = _tagMap.length;
-
-      if (_scanStartTime != null) {
-        _execTime = now.difference(_scanStartTime!).inSeconds;
-        if (_execTime > 0) {
-          _scanSpeed = (_totalTagsFound / _execTime).round();
-        }
-      }
-    });
+    _beepDebounced();
   }
 
-  /// =====================
-  /// START SCAN
-  /// =====================
+  // ================= BEEP DEBOUNCE =================
+
+  void _beepDebounced() {
+    final now = DateTime.now();
+    if (now.difference(_lastBeep).inMilliseconds < 250) return;
+    _lastBeep = now;
+    _beepPlayer.play(AssetSource('sounds/beep.mp3'));
+  }
+
+  // ================= START SCAN =================
+
   Future<void> _handleScanStart() async {
     if (_isScanning) return;
 
@@ -160,6 +158,8 @@ class _InventoryPageState extends State<InventoryPage> {
       _scanStartTime = DateTime.now();
       _execTime = 0;
       _scanSpeed = 0;
+      _buffer.clear();
+      _tagMap.clear();
     });
 
     try {
@@ -167,9 +167,34 @@ class _InventoryPageState extends State<InventoryPage> {
       await Future.delayed(const Duration(milliseconds: 200));
 
       final ok = await RfidService.startInventory();
-      if (!ok) throw Exception("RFID start failed");
+      if (!ok) throw Exception('RFID start failed');
 
       _tagSubscription?.resume();
+
+      // ⏱ UI refresh 300ms
+      _uiRefreshTimer = Timer.periodic(
+        const Duration(milliseconds: 300),
+            (_) {
+          if (!_isScanning || !mounted) return;
+
+          setState(() {
+            _tagMap
+              ..clear()
+              ..addAll(_buffer);
+
+            _totalTagsFound = _tagMap.length;
+
+            if (_scanStartTime != null) {
+              _execTime =
+                  DateTime.now().difference(_scanStartTime!).inSeconds;
+              if (_execTime > 0) {
+                _scanSpeed =
+                    (_totalTagsFound / _execTime).round();
+              }
+            }
+          });
+        },
+      );
 
       int seconds = _timeUnit == 'minutes'
           ? _timeValue * 60
@@ -179,15 +204,6 @@ class _InventoryPageState extends State<InventoryPage> {
 
       _stopScanTimer =
           Timer(Duration(seconds: seconds), _handleScanStop);
-
-      _uiUpdateTimer =
-          Timer.periodic(const Duration(seconds: 1), (_) {
-            if (!_isScanning || _scanStartTime == null) return;
-            setState(() {
-              _execTime =
-                  DateTime.now().difference(_scanStartTime!).inSeconds;
-            });
-          });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -200,27 +216,39 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-  /// =====================
-  /// STOP SCAN
-  /// =====================
+  // ================= STOP SCAN =================
+
   Future<void> _handleScanStop() async {
     if (!_isScanning) return;
 
     await RfidService.stopInventory();
     _tagSubscription?.pause();
     _stopScanTimer?.cancel();
-    _uiUpdateTimer?.cancel();
+    _uiRefreshTimer?.cancel();
 
-    if (mounted) {
-      setState(() {
-        _isScanning = false;
-      });
-    }
+    setState(() {
+      _isScanning = false;
+      _tagMap
+        ..clear()
+        ..addAll(_buffer);
+    });
   }
 
-  /// =====================
-  /// UI
-  /// =====================
+  // ================= CLEAR =================
+
+  void _clearData() {
+    if (_isScanning) return;
+    setState(() {
+      _buffer.clear();
+      _tagMap.clear();
+      _totalTagsFound = 0;
+      _scanSpeed = 0;
+      _execTime = 0;
+    });
+  }
+
+  // ================= UI =================
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -231,44 +259,45 @@ class _InventoryPageState extends State<InventoryPage> {
             setState(() => _showSettings = !_showSettings);
           },
         ),
+
         InventoryActionRow(
           timeDisplay: '$_timeValue $_timeUnit',
           isScanning: _isScanning,
           onPickTime: () {},
           onStart: _isScanning ? _handleScanStop : _handleScanStart,
-          onClear: () {
-            if (_isScanning) return;
-            setState(() {
-              _tagMap.clear();
-              _totalTagsFound = 0;
-            });
-          },
+          onClear: _clearData,
         ),
+
         const SizedBox(height: 8),
+
         InventoryInfoBar(
           tags: _rows.length,
           speed: _scanSpeed,
           total: _totalTagsFound,
           execTime: _execTime,
         ),
+
         const SizedBox(height: 8),
-        AppDataTable(
-          headers: const ['No', 'Tag ID', 'Count', 'RSSI', 'Time'],
-          rows: _rows.map((r) {
-            return [
-              Text(r.no.toString()),
-              Text(r.tagId),
-              Text(
-                r.count.toString(),
-                style: const TextStyle(
-                  color: Colors.blue,
-                  fontWeight: FontWeight.bold,
+
+        Expanded(
+          child: AppDataTable(
+            headers: const ['No', 'Tag ID', 'Count', 'RSSI', 'Time'],
+            rows: _rows.map((r) {
+              return [
+                Text(r.no.toString()),
+                Text(r.tagId),
+                Text(
+                  r.count.toString(),
+                  style: const TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              Text(r.rssi),
-              Text(r.time),
-            ];
-          }).toList(),
+                Text(r.rssi),
+                Text(r.time),
+              ];
+            }).toList(),
+          ),
         ),
       ],
     );

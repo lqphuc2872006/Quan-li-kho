@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
+
+import '../../../services/rfid_service.dart';
 import '../widgets/temp_action_bar.dart';
 import '../widgets/temp_table.dart';
 
@@ -10,75 +14,214 @@ class TempPage extends StatefulWidget {
 }
 
 class _TempPageState extends State<TempPage> {
-  bool johar = false;
-  bool axzon = false;
-  bool other = false;
-
-  final List<TempRow> _rows = [];
+  bool _isScanning = false;
   String _searchText = '';
 
-  // ======================
-  // TOGGLE CHIP
-  // ======================
-  void _toggle(String key) {
-    setState(() {
-      if (key == 'Johar') johar = !johar;
-      if (key == 'Axzon') axzon = !axzon;
-      if (key == 'Other') other = !other;
-    });
+  // 🔊 AUDIO
+  final AudioPlayer _beepPlayer = AudioPlayer();
+  DateTime _lastBeep = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // ⏱ TIMER
+  Timer? _uiRefreshTimer;
+
+  StreamSubscription<Map<dynamic, dynamic>>? _tagSubscription;
+
+  // 📦 DATA
+  final Map<String, TempRow> _buffer = {}; // raw RFID buffer
+  final Map<String, TempRow> _tagMap = {}; // UI data
+
+  @override
+  void initState() {
+    super.initState();
+    _beepPlayer.setReleaseMode(ReleaseMode.stop);
+    _initTagListener();
+    _checkConnection();
   }
 
-  // ======================
-  // START (FAKE DATA)
-  // ======================
-  void _startInventory() {
-    setState(() {
-      _rows.add(
-        TempRow(
-          id: '${_rows.length + 1}',
-          temp: '32.${_rows.length}°C',
-          antId: '1',
-          times: _rows.length + 1,
-          pc: '3000',
-          crc: 'ABCD',
-          epc: 'E2000017221101441890A1B${_rows.length}',
+  @override
+  void dispose() {
+    _tagSubscription?.cancel();
+    _uiRefreshTimer?.cancel();
+    _beepPlayer.dispose();
+    if (_isScanning) {
+      RfidService.stopInventory();
+    }
+    super.dispose();
+  }
+
+  // ================= RFID =================
+
+  void _initTagListener() {
+    _tagSubscription = RfidService.tagStream.listen(
+      _onTagScanned,
+      onError: (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('RFID error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        _handleScanStop();
+      },
+    );
+    _tagSubscription?.pause();
+  }
+
+  Future<void> _checkConnection() async {
+    final ok = await RfidService.isConnected();
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('RFID chưa kết nối'),
+          backgroundColor: Colors.orange,
         ),
       );
+    }
+  }
+
+  // ================= TAG EVENT (NO setState) =================
+
+  void _onTagScanned(Map<dynamic, dynamic> raw) {
+    final tag = RfidTag.fromMap(Map<String, dynamic>.from(raw));
+    final old = _buffer[tag.epc];
+
+    if (old != null) {
+      _buffer[tag.epc] = TempRow(
+        id: old.id,
+        epc: tag.epc,
+        times: old.times + 1,
+        temp: old.temp,
+        antId: old.antId,
+        pc: old.pc,
+        crc: old.crc,
+      );
+    } else {
+      _buffer[tag.epc] = TempRow(
+        id: (_buffer.length + 1).toString(),
+        epc: tag.epc,
+        times: 1,
+        temp: '0',
+        antId: '0',
+        pc: '0',
+        crc: '0',
+      );
+    }
+
+    _beepDebounced();
+  }
+
+  // ================= BEEP DEBOUNCE =================
+
+  void _beepDebounced() {
+    final now = DateTime.now();
+    if (now.difference(_lastBeep).inMilliseconds < 250) return;
+    _lastBeep = now;
+    _beepPlayer.play(AssetSource('sounds/beep.mp3'));
+  }
+
+  // ================= SCAN CONTROL =================
+
+  Future<void> _handleScanStart() async {
+    if (_isScanning) return;
+
+    setState(() {
+      _isScanning = true;
+      _buffer.clear();
+      _tagMap.clear();
+    });
+
+    try {
+      await RfidService.stopInventory();
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      final ok = await RfidService.startInventory();
+      if (!ok) throw Exception('Cannot start inventory');
+
+      _tagSubscription?.resume();
+
+      // ⏱ UI refresh mỗi 300ms
+      _uiRefreshTimer = Timer.periodic(
+        const Duration(milliseconds: 300),
+            (_) {
+          if (!_isScanning || !mounted) return;
+          setState(() {
+            _tagMap
+              ..clear()
+              ..addAll(_buffer);
+          });
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Start scan error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      _handleScanStop();
+    }
+  }
+
+  Future<void> _handleScanStop() async {
+    if (!_isScanning) return;
+
+    await RfidService.stopInventory();
+    _tagSubscription?.pause();
+    _uiRefreshTimer?.cancel();
+
+    setState(() {
+      _isScanning = false;
+      _tagMap
+        ..clear()
+        ..addAll(_buffer);
     });
   }
 
-  // ======================
-  // FILTER LOGIC
-  // ======================
+  // ================= CLEAR =================
+
+  void _clearTable() {
+    if (_isScanning) return;
+    setState(() {
+      _buffer.clear();
+      _tagMap.clear();
+    });
+  }
+
+  // ================= FILTER =================
+
   List<TempRow> get _filteredRows {
-    if (_searchText.isEmpty) return _rows;
+    final rows = _tagMap.values.toList()
+      ..sort((a, b) => int.parse(a.id).compareTo(int.parse(b.id)));
+
+    if (_searchText.isEmpty) return rows;
 
     final q = _searchText.toLowerCase();
-    return _rows.where((r) {
+    return rows.where((r) {
       return r.epc.toLowerCase().contains(q) ||
-          r.id.toLowerCase().contains(q) ||
-          r.antId.toLowerCase().contains(q);
+          r.id.contains(q) ||
+          r.antId.contains(q);
     }).toList();
   }
 
-  // ======================
-  // UI
-  // ======================
+  // ================= UI =================
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         TempActionBar(
-          johar: johar,
-          axzon: axzon,
-          other: other,
-          onToggle: _toggle,
-          onStart: _startInventory,
+          johar: false,
+          axzon: false,
+          other: false,
+          onToggle: (_) {},
+          onStart: _isScanning ? _handleScanStop : _handleScanStart,
+          isScanning: _isScanning,
         ),
 
         const SizedBox(height: 8),
 
-        // ================= SEARCH BAR =================
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: TextField(
@@ -90,18 +233,37 @@ class _TempPageState extends State<TempPage> {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            onChanged: (value) {
-              setState(() {
-                _searchText = value;
-              });
-            },
+            onChanged: (v) => setState(() => _searchText = v),
           ),
         ),
 
         const SizedBox(height: 8),
 
-        // ================= TABLE =================
-        TempTable(rows: _filteredRows),
+        Expanded(
+          child: TempTable(rows: _filteredRows),
+        ),
+
+        if (_tagMap.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.delete_outline),
+                label: const Text(
+                  'CLEAR DATA',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                  _isScanning ? Colors.grey : Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: _isScanning ? null : _clearTable,
+              ),
+            ),
+          ),
       ],
     );
   }
