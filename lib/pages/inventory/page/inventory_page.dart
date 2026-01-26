@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../../../services/rfid_service.dart';
 import '../widgets/inventory_settings.dart';
 import '../widgets/inventory_action_row.dart';
-import '../widgets/time_picker_sheet.dart';
 import '../widgets/inventory_info_bar.dart';
 import '../../../widgets/app_data_table.dart';
 
@@ -32,36 +32,34 @@ class InventoryPage extends StatefulWidget {
 }
 
 class _InventoryPageState extends State<InventoryPage> {
-  // ================= UI STATE =================
   bool _showSettings = false;
   bool _isScanning = false;
 
-  // ================= TIMER =================
+  final AudioPlayer _beepPlayer = AudioPlayer();
+
   Timer? _stopScanTimer;
   Timer? _uiUpdateTimer;
 
-  // ================= DATA =================
   final Map<String, InventoryRow> _tagMap = {};
   List<InventoryRow> get _rows =>
       _tagMap.values.toList()..sort((a, b) => a.no.compareTo(b.no));
 
-  // ================= STATS =================
   DateTime? _scanStartTime;
   int _totalTagsFound = 0;
   int _scanSpeed = 0;
   int _execTime = 0;
 
-  // ================= STREAM =================
   StreamSubscription<Map<dynamic, dynamic>>? _tagSubscription;
 
-  // ================= TIME CONFIG =================
   int _timeValue = 5;
   String _timeUnit = 'seconds';
 
-  // ================= LIFECYCLE =================
   @override
   void initState() {
     super.initState();
+
+    _beepPlayer.setReleaseMode(ReleaseMode.stop);
+
     _initTagListener();
     _checkConnection();
   }
@@ -71,6 +69,7 @@ class _InventoryPageState extends State<InventoryPage> {
     _tagSubscription?.cancel();
     _stopScanTimer?.cancel();
     _uiUpdateTimer?.cancel();
+    _beepPlayer.dispose();
 
     if (_isScanning) {
       RfidService.stopInventory();
@@ -78,7 +77,6 @@ class _InventoryPageState extends State<InventoryPage> {
     super.dispose();
   }
 
-  // ================= INIT STREAM =================
   void _initTagListener() {
     _tagSubscription = RfidService.tagStream.listen(
       _onTagScanned,
@@ -86,7 +84,7 @@ class _InventoryPageState extends State<InventoryPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Lỗi RFID stream: $e'),
+            content: Text('RFID error: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -94,7 +92,6 @@ class _InventoryPageState extends State<InventoryPage> {
       },
     );
 
-    // KHỞI ĐẦU PAUSE – chỉ resume khi Start
     _tagSubscription?.pause();
   }
 
@@ -103,18 +100,23 @@ class _InventoryPageState extends State<InventoryPage> {
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Thiết bị RFID chưa kết nối'),
+          content: Text('RFID chưa kết nối'),
           backgroundColor: Colors.orange,
         ),
       );
     }
   }
 
-  // ================= TAG HANDLER =================
+  /// =====================
+  /// TAG EVENT (MỖI EVENT = 1 BÍP)
+  /// =====================
   void _onTagScanned(Map<dynamic, dynamic> raw) {
     final map = Map<String, dynamic>.from(raw);
     final tag = RfidTag.fromMap(map);
     final now = DateTime.now();
+
+    // 🔊 MỖI EVENT → 1 tiếng
+    _beepPlayer.play(AssetSource('sounds/beep.mp3'));
 
     setState(() {
       final old = _tagMap[tag.epc];
@@ -147,7 +149,9 @@ class _InventoryPageState extends State<InventoryPage> {
     });
   }
 
-  // ================= START SCAN =================
+  /// =====================
+  /// START SCAN
+  /// =====================
   Future<void> _handleScanStart() async {
     if (_isScanning) return;
 
@@ -156,27 +160,22 @@ class _InventoryPageState extends State<InventoryPage> {
       _scanStartTime = DateTime.now();
       _execTime = 0;
       _scanSpeed = 0;
-      // ❌ KHÔNG clear _tagMap
-      // ❌ KHÔNG reset _totalTagsFound
     });
 
     try {
+      await RfidService.stopInventory();
+      await Future.delayed(const Duration(milliseconds: 200));
+
       final ok = await RfidService.startInventory();
-      if (!ok) throw Exception('startInventory = false');
+      if (!ok) throw Exception("RFID start failed");
 
       _tagSubscription?.resume();
 
-      int seconds;
-      switch (_timeUnit) {
-        case 'minutes':
-          seconds = _timeValue * 60;
-          break;
-        case 'hours':
-          seconds = _timeValue * 3600;
-          break;
-        default:
-          seconds = _timeValue;
-      }
+      int seconds = _timeUnit == 'minutes'
+          ? _timeValue * 60
+          : _timeUnit == 'hours'
+          ? _timeValue * 3600
+          : _timeValue;
 
       _stopScanTimer =
           Timer(Duration(seconds: seconds), _handleScanStop);
@@ -193,7 +192,7 @@ class _InventoryPageState extends State<InventoryPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Lỗi bắt đầu quét: $e'),
+          content: Text('Start scan lỗi: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -201,7 +200,9 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-  // ================= STOP SCAN =================
+  /// =====================
+  /// STOP SCAN
+  /// =====================
   Future<void> _handleScanStop() async {
     if (!_isScanning) return;
 
@@ -217,19 +218,9 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-  // ================= TIME DISPLAY =================
-  String get _timeDisplay {
-    switch (_timeUnit) {
-      case 'minutes':
-        return '$_timeValue min';
-      case 'hours':
-        return '$_timeValue h';
-      default:
-        return '$_timeValue s';
-    }
-  }
-
-  // ================= UI =================
+  /// =====================
+  /// UI
+  /// =====================
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -241,22 +232,9 @@ class _InventoryPageState extends State<InventoryPage> {
           },
         ),
         InventoryActionRow(
-          timeDisplay: _timeDisplay,
+          timeDisplay: '$_timeValue $_timeUnit',
           isScanning: _isScanning,
-          onPickTime: () {
-            if (_isScanning) return;
-            showTimePickerSheet(
-              context: context,
-              value: _timeValue,
-              unit: _timeUnit,
-              onApply: (v, u) {
-                setState(() {
-                  _timeValue = v;
-                  _timeUnit = u;
-                });
-              },
-            );
-          },
+          onPickTime: () {},
           onStart: _isScanning ? _handleScanStop : _handleScanStart,
           onClear: () {
             if (_isScanning) return;
