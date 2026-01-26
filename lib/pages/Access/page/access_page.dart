@@ -64,33 +64,35 @@ class _AccessPageState extends State<AccessPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        /// ACCESS SETTINGS
-        AccessSettings(
-          expanded: _showAccessSettings,
-          onToggle: () {
-            setState(() {
-              _showAccessSettings = !_showAccessSettings;
-            });
-          },
-        ),
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          /// ACCESS SETTINGS
+          AccessSettings(
+            expanded: _showAccessSettings,
+            onToggle: () {
+              setState(() {
+                _showAccessSettings = !_showAccessSettings;
+              });
+            },
+          ),
 
-        const SizedBox(height: 8),
+          const SizedBox(height: 8),
 
-        /// ACTION BAR – READ / WRITE / LOCK / DESTROY
-        AccessActionBar(
-          activeIndex: _accessTabIndex,
-          onChanged: (i) {
-            setState(() => _accessTabIndex = i);
-          },
-        ),
+          /// ACTION BAR – READ / WRITE / LOCK / DESTROY
+          AccessActionBar(
+            activeIndex: _accessTabIndex,
+            onChanged: (i) {
+              setState(() => _accessTabIndex = i);
+            },
+          ),
 
-        const SizedBox(height: 8),
+          const SizedBox(height: 8),
 
-        /// PANEL CONTENT
-        _buildAccessPanel(),
-      ],
+          /// PANEL CONTENT
+          _buildAccessPanel(),
+        ],
+      ),
     );
   }
 }
