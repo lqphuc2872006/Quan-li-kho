@@ -6,6 +6,7 @@ class TempActionBar extends StatelessWidget {
   final bool other;
   final VoidCallback onStart;
   final ValueChanged<String> onToggle;
+  final bool isScanning; // New parameter
 
   const TempActionBar({
     super.key,
@@ -14,6 +15,7 @@ class TempActionBar extends StatelessWidget {
     required this.other,
     required this.onStart,
     required this.onToggle,
+    required this.isScanning, // New parameter
   });
 
   @override
@@ -40,16 +42,16 @@ class TempActionBar extends StatelessWidget {
             child: ElevatedButton(
               onPressed: onStart,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
+                backgroundColor: isScanning ? Colors.red : Colors.blue, // Dynamic color
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text(
-                'START INVENTORY',
-                style: TextStyle(
+              child: Text( // Dynamic text
+                isScanning ? 'STOP INVENTORY' : 'START INVENTORY',
+                style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
                 ),

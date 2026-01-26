@@ -27,8 +27,24 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  /// MENU CHÍNH
-  String _activeMenu = 'Inventory';
+  // State preservation using an index and a list of pages
+  int _activeIndex = 0;
+
+  // Define the mapping from menu name to index
+  final Map<String, int> _pageMap = {
+    'Inventory': 0,
+    'Access': 1,
+    'Temp': 2,
+  };
+
+  // Create a persistent list of page widgets.
+  // Using const ensures the pages themselves are not rebuilt.
+  final List<Widget> _pages = const [
+    InventoryPage(),
+    AccessPage(),
+    TempPage(),
+  ];
+
 
   void _onMenuSelected(String value) {
     // xử lý menu chung (nếu cần)
@@ -63,47 +79,11 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-
-  // ======================
-  // BODY
-  // ======================
-  Widget _buildBody() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // ================= INVENTORY =================
-          if (_activeMenu == 'Inventory') ...[
-            const InventoryPage(),
-          ],
-
-          // ================= ACCESS =================
-          if (_activeMenu == 'Access') ...[
-            const AccessPage(),
-          ],
-
-          // ================= TEMP =================
-          if (_activeMenu == 'Temp') ...[
-            const SizedBox(height: 8),
-            TempPage(),
-          ],
-
-
-
-          // ================= OTHER =================
-          if (_activeMenu != 'Inventory' &&
-              _activeMenu != 'Access' &&
-              _activeMenu != 'Temp')
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                '$_activeMenu content here',
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-
-          const SizedBox(height: 24),
-        ],
-      ),
+  // Helper to get the current active menu string from the index
+  String get _activeMenu {
+    return _pageMap.keys.firstWhere(
+      (key) => _pageMap[key] == _activeIndex,
+      orElse: () => 'Inventory',
     );
   }
 
@@ -128,8 +108,9 @@ class _MyHomePageState extends State<MyHomePage> {
                 _openParams(context);
                 return;
               }
+              // Update state based on the selected menu's index
               setState(() {
-                _activeMenu = menu;
+                _activeIndex = _pageMap[menu] ?? 0;
               });
             },
             onMenuSelected: _onMenuSelected, // ⭐ menu 3 chấm
@@ -137,7 +118,11 @@ class _MyHomePageState extends State<MyHomePage> {
         ],
       ),
 
-      body: _buildBody(),
+      // Use IndexedStack to preserve state of children
+      body: IndexedStack(
+        index: _activeIndex,
+        children: _pages,
+      ),
     );
   }
 }
