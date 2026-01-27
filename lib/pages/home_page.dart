@@ -1,22 +1,11 @@
 import 'package:flutter/material.dart';
-
+import 'package:google_fonts/google_fonts.dart';
 import '../widgets/header_menu.dart';
-
-// INVENTORY PAGE (ĐÃ TÁCH)
 import 'inventory/page/inventory_page.dart';
-
-// ACCESS PAGE
 import 'Access/page/access_page.dart';
-
-// TEMP
 import 'temp/page/temp_page.dart';
-
-//Filter
 import 'filter/page/filter_page.dart';
-
-//params
 import 'params/page/params_page.dart';
-
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
@@ -26,102 +15,157 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  // State preservation using an index and a list of pages
+class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   int _activeIndex = 0;
+  late final List<Widget> _pages;
+  late final PageController _pageController;
+  bool _isLoading = false;
 
-  // Define the mapping from menu name to index
-  final Map<String, int> _pageMap = {
-    'Inventory': 0,
-    'Access': 1,
-    'Temp': 2,
-  };
-
-  // Create a persistent list of page widgets.
-  // Using const ensures the pages themselves are not rebuilt.
-  final List<Widget> _pages = const [
-    InventoryPage(),
-    AccessPage(),
-    TempPage(),
+  // Define navigation items
+  final List<BottomNavigationBarItem> _navItems = const [
+    BottomNavigationBarItem(
+      icon: Icon(Icons.inventory_2_outlined),
+      activeIcon: Icon(Icons.inventory_2),
+      label: 'Kho',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.security_outlined),
+      activeIcon: Icon(Icons.security),
+      label: 'Truy cập',
+    ),
+    BottomNavigationBarItem(
+      icon: Icon(Icons.thermostat_outlined),
+      activeIcon: Icon(Icons.thermostat),
+      label: 'Nhiệt độ',
+    ),
   ];
 
-
-  void _onMenuSelected(String value) {
-    // xử lý menu chung (nếu cần)
+  @override
+  void initState() {
+    super.initState();
+    _pages = const [
+      InventoryPage(),
+      AccessPage(),
+      TempPage(),
+    ];
+    _pageController = PageController(initialPage: _activeIndex);
   }
 
-  //Mo filter
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _activeIndex = index;
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
   void _openFilter(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => const FractionallySizedBox(
-        heightFactor: 0.9,
-        child: FilterPage(),
-      ),
-    );
+    _showModalBottomSheet(context, const FilterPage());
   }
 
   void _openParams(BuildContext context) {
+    _showModalBottomSheet(context, const ParamsPage());
+  }
+
+  void _showModalBottomSheet(BuildContext context, Widget child) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => const FractionallySizedBox(
-        heightFactor: 0.9,
-        child: ParamsPage(),
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle for the modal
+              Container(
+                margin: const EdgeInsets.only(top: 8, bottom: 16),
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              // Content
+              SizedBox(
+                height: MediaQuery.of(context).size.height * 0.85,
+                child: child,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  // Helper to get the current active menu string from the index
-  String get _activeMenu {
-    return _pageMap.keys.firstWhere(
-      (key) => _pageMap[key] == _activeIndex,
-      orElse: () => 'Inventory',
-    );
-  }
-
-  // ======================
-  // UI
-  // ======================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          HeaderMenu(
-            activeMenu: _activeMenu,
-            onChanged: (menu) {
-              if (menu == 'Filter') {
-                _openFilter(context);
-                return;
-              }
-              if (menu == 'Params') {
-                _openParams(context);
-                return;
-              }
-              // Update state based on the selected menu's index
-              setState(() {
-                _activeIndex = _pageMap[menu] ?? 0;
-              });
-            },
-            onMenuSelected: _onMenuSelected, // ⭐ menu 3 chấm
+        title: Text(
+          widget.title,
+          style: GoogleFonts.roboto(
+            fontWeight: FontWeight.w500,
+            fontSize: 20,
           ),
+        ),
+        elevation: 0,
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_alt_outlined),
+            onPressed: () => _openFilter(context),
+            tooltip: 'Bộ lọc',
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => _openParams(context),
+            tooltip: 'Cài đặt',
+          ),
+          const SizedBox(width: 8),
         ],
       ),
-
-      // Use IndexedStack to preserve state of children
-      body: IndexedStack(
-        index: _activeIndex,
-        children: _pages,
+      body: Stack(
+        children: [
+          PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() => _activeIndex = index);
+            },
+            children: _pages,
+          ),
+          if (_isLoading)
+            Container(
+              color: Colors.black26,
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        items: _navItems,
+        currentIndex: _activeIndex,
+        selectedItemColor: Theme.of(context).primaryColor,
+        unselectedItemColor: Colors.grey,
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
+        onTap: _onItemTapped,
+        elevation: 8,
       ),
     );
   }

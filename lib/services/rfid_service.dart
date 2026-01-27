@@ -87,6 +87,18 @@ class RfidService {
     }
   }
 
+  static Future<bool> requestPermissions(String devicePath) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'requestPermissions',
+        {'devicePath': devicePath},
+      );
+      return result ?? false;
+    } catch (e) {
+      throw Exception('Lỗi yêu cầu quyền truy cập: $e');
+    }
+  }
+
   // ============================
   // TAG STREAM (FIXED)
   // ============================

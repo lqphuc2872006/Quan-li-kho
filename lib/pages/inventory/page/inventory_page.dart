@@ -158,8 +158,7 @@ class _InventoryPageState extends State<InventoryPage> {
       _scanStartTime = DateTime.now();
       _execTime = 0;
       _scanSpeed = 0;
-      _buffer.clear();
-      _tagMap.clear();
+      // ❌ KHÔNG clear _buffer, _tagMap
     });
 
     try {
@@ -171,7 +170,6 @@ class _InventoryPageState extends State<InventoryPage> {
 
       _tagSubscription?.resume();
 
-      // ⏱ UI refresh 300ms
       _uiRefreshTimer = Timer.periodic(
         const Duration(milliseconds: 300),
             (_) {
@@ -215,6 +213,7 @@ class _InventoryPageState extends State<InventoryPage> {
       _handleScanStop();
     }
   }
+
 
   // ================= STOP SCAN =================
 
