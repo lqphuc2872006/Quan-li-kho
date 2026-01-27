@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 
 import '../../../services/rfid_service.dart';
+import '../../../services/models/inventory_tag.dart';
 import '../widgets/inventory_settings.dart';
 import '../widgets/inventory_action_row.dart';
 import '../widgets/inventory_info_bar.dart';
@@ -115,7 +116,7 @@ class _InventoryPageState extends State<InventoryPage> {
   // ================= TAG EVENT (NO setState) =================
 
   void _onTagScanned(Map<dynamic, dynamic> raw) {
-    final tag = RfidTag.fromMap(Map<String, dynamic>.from(raw));
+    final tag = InventoryTag.fromMap(Map<String, dynamic>.from(raw));
     final old = _buffer[tag.epc];
 
     if (old != null) {

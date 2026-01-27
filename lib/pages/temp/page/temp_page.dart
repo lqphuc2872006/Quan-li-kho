@@ -3,6 +3,7 @@
   import 'package:audioplayers/audioplayers.dart';
 
   import '../../../services/rfid_service.dart';
+  import '../../../services/models/temp_tag.dart';
   import '../widgets/temp_action_bar.dart';
   import '../widgets/temp_table.dart';
 
@@ -83,33 +84,27 @@
     // ================= TAG EVENT (NO setState) =================
 
     void _onTagScanned(Map<dynamic, dynamic> raw) {
-      final tag = RfidTag.fromMap(Map<String, dynamic>.from(raw));
+      final tag = TempTag.fromMap(Map<String, dynamic>.from(raw));
+
+      if (tag.epc.isEmpty) return;
+
       final old = _buffer[tag.epc];
 
-      if (old != null) {
-        _buffer[tag.epc] = TempRow(
-          id: old.id,
-          epc: tag.epc,
-          times: old.times + 1,
-          temp: old.temp,
-          antId: old.antId,
-          pc: old.pc,
-          crc: old.crc,
-        );
-      } else {
-        _buffer[tag.epc] = TempRow(
-          id: (_buffer.length + 1).toString(),
-          epc: tag.epc,
-          times: 1,
-          temp: '0',
-          antId: '0',
-          pc: '0',
-          crc: '0',
-        );
-      }
+      _buffer[tag.epc] = TempRow(
+        id: old?.id ?? (_buffer.length + 1).toString(),
+        epc: tag.epc,
+        times: (old?.times ?? 0) + 1,
+
+        // ✅ LẤY TRỰC TIẾP TỪ TempTag
+        temp: tag.temp.isNotEmpty ? tag.temp : (old?.temp ?? '0'),
+        antId: tag.antId.isNotEmpty ? tag.antId : (old?.antId ?? '0'),
+        pc: tag.pc.isNotEmpty ? tag.pc : (old?.pc ?? '0'),
+        crc: tag.crc.isNotEmpty ? tag.crc : (old?.crc ?? '0'),
+      );
 
       _beepDebounced();
     }
+
 
     // ================= BEEP DEBOUNCE =================
 
