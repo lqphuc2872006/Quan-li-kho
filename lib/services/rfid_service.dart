@@ -87,6 +87,18 @@ class RfidService {
     }
   }
 
+  static Future<bool> requestPermissions(String devicePath) async {
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'requestPermissions',
+        {'devicePath': devicePath},
+      );
+      return result ?? false;
+    } catch (e) {
+      throw Exception('Lỗi yêu cầu quyền truy cập: $e');
+    }
+  }
+
   // ============================
   // TAG STREAM (FIXED)
   // ============================
@@ -107,36 +119,4 @@ class RfidService {
 /// ============================
 /// MODEL TAG
 /// ============================
-class RfidTag {
-  final String epc;
-  final String rssi;
-  final String timestamp;
-  final int count;
 
-  RfidTag({
-    required this.epc,
-    required this.rssi,
-    required this.timestamp,
-    this.count = 1,
-  });
-
-  factory RfidTag.fromMap(Map<String, dynamic> map) {
-    String time;
-
-    if (map['timestamp'] is int) {
-      time = DateTime.fromMillisecondsSinceEpoch(map['timestamp'])
-          .toString()
-          .substring(11, 19);
-    } else {
-      time = map['timestamp']?.toString() ??
-          DateTime.now().toString().substring(11, 19);
-    }
-
-    return RfidTag(
-      epc: map['epc']?.toString() ?? '',
-      rssi: map['rssi']?.toString() ?? '',
-      timestamp: time,
-      count: map['count'] ?? 1,
-    );
-  }
-}

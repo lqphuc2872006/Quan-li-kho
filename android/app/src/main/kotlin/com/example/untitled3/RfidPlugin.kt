@@ -46,9 +46,37 @@ class RfidPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.
             "isConnected" -> {
                 result.success(rfidHelper.isConnected())
             }
+            "requestPermissions" -> {
+                val devicePath = call.argument<String>("devicePath")
+                if (devicePath != null) {
+                    requestPermissions(devicePath, result)
+                } else {
+                    result.error("INVALID_ARGUMENT", "devicePath cannot be null", null)
+                }
+            }
             else -> {
                 result.notImplemented()
             }
+        }
+    }
+
+    private fun requestPermissions(devicePath: String, result: MethodChannel.Result) {
+        try {
+            Log.d("RfidPlugin", "Requesting permissions for device: $devicePath")
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "chmod 666 $devicePath"))
+            val exitCode = process.waitFor()
+
+            if (exitCode == 0) {
+                Log.d("RfidPlugin", "Permissions granted for $devicePath")
+                result.success(true)
+            } else {
+                val errorStream = process.errorStream.bufferedReader().readText()
+                Log.e("RfidPlugin", "Failed to grant permissions for $devicePath. Exit code: $exitCode, Error: $errorStream")
+                result.error("PERMISSION_ERROR", "Failed to grant permissions: $errorStream", null)
+            }
+        } catch (e: Exception) {
+            Log.e("RfidPlugin", "Error requesting permissions: ${e.message}", e)
+            result.error("PERMISSION_ERROR", "Error requesting permissions: ${e.message}", null)
         }
     }
 
