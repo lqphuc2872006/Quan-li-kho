@@ -1,263 +1,158 @@
-  import 'package:flutter/material.dart';
-  import 'dart:async';
-  import 'package:audioplayers/audioplayers.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
 
-  import '../../../services/rfid_service.dart';
-  import '../../../services/models/temp_tag.dart';
-  import '../widgets/temp_action_bar.dart';
-  import '../widgets/temp_table.dart';
+import '../../inventory/page/store/inventory_store.dart';
+import '../../../services/models/inventory_tag.dart';
+import '../../../services/models/temp_tag.dart';
+import '../page/store/temp_store.dart';
 
-  class TempPage extends StatefulWidget {
-    const TempPage({super.key});
+import '../widgets/temp_action_bar.dart';
+import '../widgets/temp_table.dart';
 
-    @override
-    State<TempPage> createState() => _TempPageState();
+class TempPage extends StatefulWidget {
+  const TempPage({super.key});
+
+  @override
+  State<TempPage> createState() => _TempPageState();
+}
+
+class _TempPageState extends State<TempPage> {
+  bool _isScanning = false;
+  String _searchText = '';
+
+  Timer? _pollTimer;
+
+  // ================= START TEMP =================
+
+  void _startTemp() {
+    if (_isScanning) return;
+
+    setState(() {
+      _isScanning = true;
+    });
+
+    _pollTimer = Timer.periodic(
+      const Duration(milliseconds: 300),
+          (_) {
+        if (!_isScanning) return;
+
+        // 🔥 INVENTORY → TEMP STORE
+        TempStore.upsertFromInventory(
+          InventoryStore.all,
+        );
+
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
   }
 
-  class _TempPageState extends State<TempPage> {
-    bool _isScanning = false;
-    String _searchText = '';
+  // ================= STOP TEMP =================
 
-    // 🔊 AUDIO
-    final AudioPlayer _beepPlayer = AudioPlayer();
-    DateTime _lastBeep = DateTime.fromMillisecondsSinceEpoch(0);
+  void _stopTemp() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
 
-    // ⏱ TIMER
-    Timer? _uiRefreshTimer;
+    setState(() {
+      _isScanning = false;
+    });
+  }
 
-    StreamSubscription<Map<dynamic, dynamic>>? _tagSubscription;
+  // ================= CLEAR =================
 
-    // 📦 DATA
-    final Map<String, TempRow> _buffer = {}; // raw RFID buffer
-    final Map<String, TempRow> _tagMap = {}; // UI data
+  void _clear() {
+    if (_isScanning) return;
 
-    @override
-    void initState() {
-      super.initState();
-      _beepPlayer.setReleaseMode(ReleaseMode.stop);
-      _initTagListener();
-      _checkConnection();
-    }
+    TempStore.clear();
+    setState(() {});
+  }
 
-    @override
-    void dispose() {
-      _tagSubscription?.cancel();
-      _uiRefreshTimer?.cancel();
-      _beepPlayer.dispose();
-      if (_isScanning) {
-        RfidService.stopInventory();
-      }
-      super.dispose();
-    }
+  // ================= FILTER (STORE LEVEL) =================
 
-    // ================= RFID =================
+  List<TempTag> get _filteredTags {
+    final list = TempStore.all
+      ..sort((a, b) => a.epc.compareTo(b.epc));
 
-    void _initTagListener() {
-      _tagSubscription = RfidService.tagStream.listen(
-        _onTagScanned,
-        onError: (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('RFID error: $e'),
-              backgroundColor: Colors.red,
+    if (_searchText.isEmpty) return list;
+
+    final q = _searchText.toLowerCase();
+    return list.where((t) =>
+        t.epc.toLowerCase().contains(q)
+    ).toList();
+  }
+
+  // ================= MAP TO UI ROW =================
+
+  List<TempRow> get _uiRows {
+    int index = 1;
+    return _filteredTags.map((t) {
+      return TempRow(
+        id: (index++).toString(),
+        epc: t.epc,
+        times: t.times,
+        temp: t.temp,
+        antId: t.antId,
+        pc: t.pc,
+        crc: t.crc,
+      );
+    }).toList();
+  }
+
+  // ================= UI =================
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TempActionBar(
+          johar: false,
+          axzon: false,
+          other: false,
+          onToggle: (_) {},
+          onStart: _isScanning ? _stopTemp : _startTemp,
+          isScanning: _isScanning,
+        ),
+
+        const SizedBox(height: 8),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Search EPC',
+              prefixIcon: const Icon(Icons.search),
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-          );
-          _handleScanStop();
-        },
-      );
-      _tagSubscription?.pause();
-    }
-
-    Future<void> _checkConnection() async {
-      final ok = await RfidService.isConnected();
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('RFID chưa kết nối'),
-            backgroundColor: Colors.orange,
+            onChanged: (v) => setState(() => _searchText = v),
           ),
-        );
-      }
-    }
+        ),
 
-    // ================= TAG EVENT (NO setState) =================
+        const SizedBox(height: 8),
 
-    void _onTagScanned(Map<dynamic, dynamic> raw) {
-      final tag = TempTag.fromMap(Map<String, dynamic>.from(raw));
-
-      if (tag.epc.isEmpty) return;
-
-      final old = _buffer[tag.epc];
-
-      _buffer[tag.epc] = TempRow(
-        id: old?.id ?? (_buffer.length + 1).toString(),
-        epc: tag.epc,
-        times: (old?.times ?? 0) + 1,
-
-        // ✅ LẤY TRỰC TIẾP TỪ TempTag
-        temp: tag.temp.isNotEmpty ? tag.temp : (old?.temp ?? '0'),
-        antId: tag.antId.isNotEmpty ? tag.antId : (old?.antId ?? '0'),
-        pc: tag.pc.isNotEmpty ? tag.pc : (old?.pc ?? '0'),
-        crc: tag.crc.isNotEmpty ? tag.crc : (old?.crc ?? '0'),
-      );
-
-      _beepDebounced();
-    }
-
-
-    // ================= BEEP DEBOUNCE =================
-
-    void _beepDebounced() {
-      final now = DateTime.now();
-      if (now.difference(_lastBeep).inMilliseconds < 250) return;
-      _lastBeep = now;
-      _beepPlayer.play(AssetSource('sounds/beep.mp3'));
-    }
-
-    // ================= SCAN CONTROL =================
-
-    Future<void> _handleScanStart() async {
-      if (_isScanning) return;
-
-      setState(() {
-        _isScanning = true;
-      });
-
-      try {
-        await RfidService.stopInventory();
-        await Future.delayed(const Duration(milliseconds: 150));
-
-        final ok = await RfidService.startInventory();
-        if (!ok) throw Exception('Cannot start inventory');
-
-        _tagSubscription?.resume();
-
-        // ⏱ UI refresh mỗi 300ms
-        _uiRefreshTimer = Timer.periodic(
-          const Duration(milliseconds: 300),
-              (_) {
-            if (!_isScanning || !mounted) return;
-            setState(() {
-              _tagMap
-                ..clear()
-                ..addAll(_buffer);
-            });
-          },
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Start scan error: $e'),
-            backgroundColor: Colors.red,
+        Expanded(
+          child: TempTable(
+            rows: _uiRows, // ✅ ĐÚNG KIỂU
           ),
-        );
-        _handleScanStop();
-      }
-    }
+        ),
 
-    Future<void> _handleScanStop() async {
-      if (!_isScanning) return;
-
-      await RfidService.stopInventory();
-      _tagSubscription?.pause();
-      _uiRefreshTimer?.cancel();
-
-      setState(() {
-        _isScanning = false;
-        _tagMap
-          ..clear()
-          ..addAll(_buffer);
-      });
-    }
-
-    // ================= CLEAR =================
-
-    void _clearTable() {
-      if (_isScanning) return;
-      setState(() {
-        _buffer.clear();
-        _tagMap.clear();
-      });
-    }
-
-    // ================= FILTER =================
-
-    List<TempRow> get _filteredRows {
-      final rows = _tagMap.values.toList()
-        ..sort((a, b) => int.parse(a.id).compareTo(int.parse(b.id)));
-
-      if (_searchText.isEmpty) return rows;
-
-      final q = _searchText.toLowerCase();
-      return rows.where((r) {
-        return r.epc.toLowerCase().contains(q) ||
-            r.id.contains(q) ||
-            r.antId.contains(q);
-      }).toList();
-    }
-
-    // ================= UI =================
-
-    @override
-    Widget build(BuildContext context) {
-      return Column(
-        children: [
-          TempActionBar(
-            johar: false,
-            axzon: false,
-            other: false,
-            onToggle: (_) {},
-            onStart: _isScanning ? _handleScanStop : _handleScanStart,
-            isScanning: _isScanning,
-          ),
-
-          const SizedBox(height: 8),
-
+        if (TempStore.hasData)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search EPC / ID / Antenna',
-                prefixIcon: const Icon(Icons.search),
-                isDense: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onChanged: (v) => setState(() => _searchText = v),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Expanded(
-            child: TempTable(rows: _filteredRows),
-          ),
-
-          if (_tagMap.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text(
-                    'CLEAR DATA',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                    _isScanning ? Colors.grey : Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: _isScanning ? null : _clearTable,
-                ),
+            padding: const EdgeInsets.all(12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('CLEAR DATA'),
+                onPressed: _clear,
               ),
             ),
-        ],
-      );
-    }
+          ),
+      ],
+    );
   }
+}
