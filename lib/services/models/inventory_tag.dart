@@ -1,33 +1,49 @@
 class InventoryTag {
   final String epc;
   final String rssi;
-  final String timestamp;
+  final DateTime lastSeen;
   final int count;
 
-  InventoryTag({
+  const InventoryTag({
     required this.epc,
     required this.rssi,
-    required this.timestamp,
+    required this.lastSeen,
     this.count = 1,
   });
 
-  factory InventoryTag.fromMap(Map<String, dynamic> map) {
-    String time;
+  // 🔁 COPY
+  InventoryTag copyWith({
+    String? rssi,
+    DateTime? lastSeen,
+    int? count,
+  }) {
+    return InventoryTag(
+      epc: epc,
+      rssi: rssi ?? this.rssi,
+      lastSeen: lastSeen ?? this.lastSeen,
+      count: count ?? this.count,
+    );
+  }
 
-    if (map['timestamp'] is int) {
-      time = DateTime.fromMillisecondsSinceEpoch(map['timestamp'])
-          .toString()
-          .substring(11, 19);
+  // 🏭 FROM RFID
+  factory InventoryTag.fromMap(Map<String, dynamic> map) {
+    DateTime time;
+
+    final rawTime = map['timestamp'];
+    if (rawTime is int) {
+      time = DateTime.fromMillisecondsSinceEpoch(rawTime);
     } else {
-      time = map['timestamp']?.toString() ??
-          DateTime.now().toString().substring(11, 19);
+      time = DateTime.now();
     }
 
     return InventoryTag(
       epc: map['epc']?.toString() ?? '',
       rssi: map['rssi']?.toString() ?? '',
-      timestamp: time,
-      count: map['count'] ?? 1,
+      lastSeen: time,
     );
   }
+
+  // 🎨 UI HELPER
+  String get displayTime =>
+      lastSeen.toString().substring(11, 19);
 }

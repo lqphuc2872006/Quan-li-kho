@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 
+import '../page/store/inventory_store.dart';
 import '../../../services/rfid_service.dart';
 import '../../../services/models/inventory_tag.dart';
 import '../widgets/inventory_settings.dart';
@@ -13,17 +14,16 @@ class InventoryRow {
   final int no;
   final String tagId;
   final String rssi;
-  final String time;
-  final int count;
+  final int time; // 👈 số lần quét
 
   InventoryRow({
     required this.no,
     required this.tagId,
     required this.rssi,
     required this.time,
-    required this.count,
   });
 }
+
 
 class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
@@ -36,20 +36,13 @@ class _InventoryPageState extends State<InventoryPage> {
   bool _showSettings = false;
   bool _isScanning = false;
 
-  // 🔊 AUDIO
+  // AUDIO
   final AudioPlayer _beepPlayer = AudioPlayer();
   DateTime _lastBeep = DateTime.fromMillisecondsSinceEpoch(0);
 
-  // ⏱ TIMERS
+  // TIMERS
   Timer? _stopScanTimer;
   Timer? _uiRefreshTimer;
-
-  // 📦 DATA
-  final Map<String, InventoryRow> _buffer = {}; // RFID buffer
-  final Map<String, InventoryRow> _tagMap = {}; // UI data
-
-  List<InventoryRow> get _rows =>
-      _tagMap.values.toList()..sort((a, b) => a.no.compareTo(b.no));
 
   DateTime? _scanStartTime;
   int _totalTagsFound = 0;
@@ -60,6 +53,20 @@ class _InventoryPageState extends State<InventoryPage> {
 
   int _timeValue = 5;
   String _timeUnit = 'seconds';
+
+  // DERIVE TABLE FROM STORE
+  List<InventoryRow> get _rows {
+    int index = 1;
+    return InventoryStore.all.map((tag) {
+      return InventoryRow(
+        no: index++,
+        tagId: tag.epc,
+        rssi: tag.rssi,
+        time: tag.count, // 🔥 time = số lần quét
+      );
+    }).toList();
+  }
+
 
   @override
   void initState() {
@@ -82,8 +89,7 @@ class _InventoryPageState extends State<InventoryPage> {
     super.dispose();
   }
 
-  // ================= RFID =================
-
+  // RFID LISTENER
   void _initTagListener() {
     _tagSubscription = RfidService.tagStream.listen(
       _onTagScanned,
@@ -113,35 +119,17 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-  // ================= TAG EVENT (NO setState) =================
-
+  // TAG EVENT
   void _onTagScanned(Map<dynamic, dynamic> raw) {
-    final tag = InventoryTag.fromMap(Map<String, dynamic>.from(raw));
-    final old = _buffer[tag.epc];
+    final tag = InventoryTag.fromMap(
+      Map<String, dynamic>.from(raw),
+    );
 
-    if (old != null) {
-      _buffer[tag.epc] = InventoryRow(
-        no: old.no,
-        tagId: tag.epc,
-        rssi: tag.rssi,
-        time: tag.timestamp,
-        count: old.count + 1,
-      );
-    } else {
-      _buffer[tag.epc] = InventoryRow(
-        no: _buffer.length + 1,
-        tagId: tag.epc,
-        rssi: tag.rssi,
-        time: tag.timestamp,
-        count: 1,
-      );
-    }
-
+    InventoryStore.upsert(tag);
     _beepDebounced();
   }
 
-  // ================= BEEP DEBOUNCE =================
-
+  // BEEP
   void _beepDebounced() {
     final now = DateTime.now();
     if (now.difference(_lastBeep).inMilliseconds < 250) return;
@@ -149,8 +137,7 @@ class _InventoryPageState extends State<InventoryPage> {
     _beepPlayer.play(AssetSource('sounds/beep.mp3'));
   }
 
-  // ================= START SCAN =================
-
+  // START SCAN
   Future<void> _handleScanStart() async {
     if (_isScanning) return;
 
@@ -159,7 +146,6 @@ class _InventoryPageState extends State<InventoryPage> {
       _scanStartTime = DateTime.now();
       _execTime = 0;
       _scanSpeed = 0;
-      // ❌ KHÔNG clear _buffer, _tagMap
     });
 
     try {
@@ -177,15 +163,12 @@ class _InventoryPageState extends State<InventoryPage> {
           if (!_isScanning || !mounted) return;
 
           setState(() {
-            _tagMap
-              ..clear()
-              ..addAll(_buffer);
-
-            _totalTagsFound = _tagMap.length;
+            _totalTagsFound = InventoryStore.total;
 
             if (_scanStartTime != null) {
-              _execTime =
-                  DateTime.now().difference(_scanStartTime!).inSeconds;
+              _execTime = DateTime.now()
+                  .difference(_scanStartTime!)
+                  .inSeconds;
               if (_execTime > 0) {
                 _scanSpeed =
                     (_totalTagsFound / _execTime).round();
@@ -215,9 +198,7 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-
-  // ================= STOP SCAN =================
-
+  // STOP SCAN
   Future<void> _handleScanStop() async {
     if (!_isScanning) return;
 
@@ -228,38 +209,32 @@ class _InventoryPageState extends State<InventoryPage> {
 
     setState(() {
       _isScanning = false;
-      _tagMap
-        ..clear()
-        ..addAll(_buffer);
     });
   }
 
-  // ================= CLEAR =================
-
+  // CLEAR
   void _clearData() {
     if (_isScanning) return;
+
+    InventoryStore.clear();
+
     setState(() {
-      _buffer.clear();
-      _tagMap.clear();
       _totalTagsFound = 0;
       _scanSpeed = 0;
       _execTime = 0;
     });
   }
 
-  // ================= UI =================
-
+  // UI
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         InventorySettings(
           expanded: _showSettings,
-          onToggle: () {
-            setState(() => _showSettings = !_showSettings);
-          },
+          onToggle: () =>
+              setState(() => _showSettings = !_showSettings),
         ),
-
         InventoryActionRow(
           timeDisplay: '$_timeValue $_timeUnit',
           isScanning: _isScanning,
@@ -267,34 +242,29 @@ class _InventoryPageState extends State<InventoryPage> {
           onStart: _isScanning ? _handleScanStop : _handleScanStart,
           onClear: _clearData,
         ),
-
         const SizedBox(height: 8),
-
         InventoryInfoBar(
           tags: _rows.length,
           speed: _scanSpeed,
           total: _totalTagsFound,
           execTime: _execTime,
         ),
-
         const SizedBox(height: 8),
-
         Expanded(
           child: AppDataTable(
-            headers: const ['No', 'Tag ID', 'Count', 'RSSI', 'Time'],
+            headers: const ['No', 'Tag ID', 'Time', 'RSSI'],
             rows: _rows.map((r) {
               return [
                 Text(r.no.toString()),
                 Text(r.tagId),
                 Text(
-                  r.count.toString(),
+                  r.time.toString(),
                   style: const TextStyle(
                     color: Colors.blue,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 Text(r.rssi),
-                Text(r.time),
               ];
             }).toList(),
           ),
