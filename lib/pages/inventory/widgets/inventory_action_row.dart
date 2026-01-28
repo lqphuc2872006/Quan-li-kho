@@ -26,7 +26,13 @@ class InventoryActionRow extends StatelessWidget {
             flex: 2,
             child: OutlinedButton.icon(
               icon: const Icon(Icons.timer),
-              label: Text('Time ($timeDisplay)'),
+              label: Text(
+                'Time ($timeDisplay)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+              ),
+
               onPressed: isScanning ? null : onPickTime,
             ),
           ),

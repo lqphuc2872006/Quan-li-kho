@@ -228,29 +228,45 @@ class _InventoryPageState extends State<InventoryPage> {
   // UI
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        InventorySettings(
-          expanded: _showSettings,
-          onToggle: () =>
-              setState(() => _showSettings = !_showSettings),
+    return CustomScrollView(
+      slivers: [
+        // ===== SETTINGS =====
+        SliverToBoxAdapter(
+          child: InventorySettings(
+            expanded: _showSettings,
+            onToggle: () =>
+                setState(() => _showSettings = !_showSettings),
+          ),
         ),
-        InventoryActionRow(
-          timeDisplay: '$_timeValue $_timeUnit',
-          isScanning: _isScanning,
-          onPickTime: () {},
-          onStart: _isScanning ? _handleScanStop : _handleScanStart,
-          onClear: _clearData,
+
+        // ===== ACTION ROW =====
+        SliverToBoxAdapter(
+          child: InventoryActionRow(
+            timeDisplay: '$_timeValue $_timeUnit',
+            isScanning: _isScanning,
+            onPickTime: () {},
+            onStart:
+            _isScanning ? _handleScanStop : _handleScanStart,
+            onClear: _clearData,
+          ),
         ),
-        const SizedBox(height: 8),
-        InventoryInfoBar(
-          tags: _rows.length,
-          speed: _scanSpeed,
-          total: _totalTagsFound,
-          execTime: _execTime,
+
+        // ===== INFO BAR =====
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: InventoryInfoBar(
+              tags: _rows.length,
+              speed: _scanSpeed,
+              total: _totalTagsFound,
+              execTime: _execTime,
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
-        Expanded(
+
+        // ===== TABLE (CHIẾM PHẦN CÒN LẠI) =====
+        SliverFillRemaining(
+          hasScrollBody: true,
           child: AppDataTable(
             headers: const ['No', 'Tag ID', 'Time', 'RSSI'],
             rows: _rows.map((r) {
@@ -272,4 +288,5 @@ class _InventoryPageState extends State<InventoryPage> {
       ],
     );
   }
+
 }
