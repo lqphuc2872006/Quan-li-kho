@@ -43,7 +43,12 @@ class InventorySettings extends StatelessWidget {
           duration: const Duration(milliseconds: 250),
           crossFadeState:
           expanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-          firstChild: _SettingsPanel(),
+          firstChild: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.55,
+            child: SingleChildScrollView(
+              child: _SettingsPanel(),
+            ),
+          ),
           secondChild: const SizedBox.shrink(),
         ),
       ],
